@@ -1,0 +1,7 @@
+body {
+    background-color: #f8f9fa; /* Um cinza bem claro para o fundo */
+}
+
+.bg-light { /* Ajuste para o container principal ter um fundo branco */
+    background-color: #fff !important;
+}

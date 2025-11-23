@@ -1,0 +1,245 @@
+{% extends 'financeiro/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Dashboard - Gestão Financeira{% endblock %}
+
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2">Dashboard</h1>
+    <div>
+      <button id="btn-voice-command" class="btn btn-info me-2" title="Comando de Voz">
+        <i class="bi bi-mic-fill"></i>
+      </button>
+      <a href="{% url 'financeiro:registro_novo' %}" class="btn btn-primary">
+        + Novo Registro
+      </a>
+    </div>
+  </div>
+
+  <!-- Filtro de Data -->
+  <div id="voice-status" class="alert alert-info" style="display: none;"></div>
+
+  {% include 'financeiro/_filtro_data.html' %}
+
+  <!-- Cards de Resumo -->
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <div class="card text-white bg-success">
+        <div class="card-header">Total de Entradas</div>
+        <div class="card-body">
+          <h5 class="card-title">R$ {{ total_entradas|floatformat:2|intcomma }}</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card text-white bg-danger">
+        <div class="card-header">Total de Saídas</div>
+        <div class="card-body">
+          <h5 class="card-title">R$ {{ total_saidas|floatformat:2|intcomma }}</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card text-white bg-info">
+        <div class="card-header">Saldo Atual</div>
+        <div class="card-body">
+          <h5 class="card-title">R$ {{ saldo|floatformat:2|intcomma }}</h5>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráficos -->
+  <div class="row mt-4">
+    <div class="col-lg-6 mb-4">
+      <h2 class="h4">Distribuição de Saídas</h2>
+      <canvas id="saidasChart"></canvas>
+    </div>
+    <div class="col-lg-6 mb-4">
+      <h2 class="h4">Distribuição de Entradas</h2>
+      <canvas id="entradasChart"></canvas>
+    </div>
+  </div>
+
+
+  <!-- Últimos Registros -->
+  <h2 class="mt-2 h4">Últimos 5 Registros</h2>
+  <div class="table-responsive">
+    <table class="table table-striped table-hover">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Descrição</th>
+          <th>Categoria</th>
+          <th>Tipo</th>
+          <th class="text-end">Valor</th>
+          <th class="text-center">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for registro in ultimos_registros %}
+          <tr>
+            <td>{{ registro.data|date:"d/m/Y" }}</td>
+            <td>{{ registro.descricao|default:"-" }}</td>
+            <td>
+              {{ registro.categoria.nome }}
+            </td>
+            <td>
+              <span class="badge {% if registro.categoria.tipo == 'entrada' %}bg-success-subtle text-success-emphasis{% else %}bg-danger-subtle text-danger-emphasis{% endif %}">
+                {{ registro.categoria.get_tipo_display }}
+              </span>
+            </td>
+            <td class="text-end {% if registro.categoria.tipo == 'entrada' %}text-success{% else %}text-danger{% endif %}">
+              R$ {{ registro.valor|floatformat:2|intcomma }}
+            </td>
+            <td class="text-center">
+              <a href="{% url 'financeiro:registro_excluir' registro.pk %}" class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="return confirm('Tem certeza que deseja excluir este registro?');">
+                <i class="bi bi-trash"></i>
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              <i class="bi bi-info-circle me-2"></i>Nenhum registro encontrado.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const btnVoiceCommand = document.getElementById('btn-voice-command');
+    const voiceStatus = document.getElementById('voice-status');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      btnVoiceCommand.disabled = true;
+      voiceStatus.textContent = 'Seu navegador não suporta comandos de voz.';
+      voiceStatus.className = 'alert alert-warning';
+      voiceStatus.style.display = 'block';
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    btnVoiceCommand.addEventListener('click', () => {
+      recognition.start();
+    });
+
+    recognition.onstart = () => {
+      voiceStatus.textContent = 'Ouvindo... Fale o seu comando. Ex: "Gastei 50 reais com almoço"';
+      voiceStatus.className = 'alert alert-info';
+      voiceStatus.style.display = 'block';
+      btnVoiceCommand.disabled = true;
+    };
+
+    recognition.onresult = (event) => {
+      const spokenText = event.results[0][0].transcript;
+      voiceStatus.textContent = `Você disse: "${spokenText}". Processando...`;
+      voiceStatus.className = 'alert alert-warning';
+      sendVoiceCommandToDjango(spokenText);
+    };
+
+    recognition.onerror = (event) => {
+      voiceStatus.textContent = `Erro no reconhecimento: ${event.error}`;
+      voiceStatus.className = 'alert alert-danger';
+    };
+
+    recognition.onend = () => {
+      btnVoiceCommand.disabled = false;
+    };
+
+    function sendVoiceCommandToDjango(text) {
+      fetch("{% url 'financeiro:processar_voz' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ command: text })
+      })
+      .then(response => response.json())
+      .then(data => {
+        voiceStatus.className = data.success ? 'alert alert-success' : 'alert alert-danger';
+        voiceStatus.textContent = data.message;
+        if (data.success) {
+          setTimeout(() => window.location.reload(), 2000);
+        }
+      })
+      .catch(error => {
+        voiceStatus.className = 'alert alert-danger';
+        voiceStatus.textContent = 'Erro ao se comunicar com o servidor.';
+      });
+    }
+  });
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // Gráfico de Saídas
+    const saidasCtx = document.getElementById('saidasChart');
+    if (saidasCtx) {
+      const saidasLabels = JSON.parse('{{ saidas_chart_labels|safe }}');
+      const saidasData = JSON.parse('{{ saidas_chart_data|safe }}');
+
+      if (saidasData.length > 0) {
+        new Chart(saidasCtx, {
+          type: 'doughnut',
+          data: {
+            labels: saidasLabels,
+            datasets: [{
+              label: 'Total de Saídas',
+              data: saidasData,
+              backgroundColor: [
+                'rgba(255, 99, 132, 0.7)', 'rgba(255, 159, 64, 0.7)', 'rgba(255, 205, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(153, 102, 255, 0.7)',
+                'rgba(201, 203, 207, 0.7)'
+              ],
+              borderColor: '#fff',
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: 'top' } }
+          }
+        });
+      } else {
+        saidasCtx.parentElement.innerHTML += '<p class="text-center text-muted">Sem dados de saída para exibir no gráfico.</p>';
+      }
+    }
+
+    // Gráfico de Entradas
+    const entradasCtx = document.getElementById('entradasChart');
+    if (entradasCtx) {
+      const entradasLabels = JSON.parse('{{ entradas_chart_labels|safe }}');
+      const entradasData = JSON.parse('{{ entradas_chart_data|safe }}');
+
+      if (entradasData.length > 0) {
+        new Chart(entradasCtx, {
+          type: 'doughnut',
+          data: {
+            labels: entradasLabels,
+            datasets: [{
+              label: 'Total de Entradas',
+              data: entradasData,
+              backgroundColor: ['rgba(40, 167, 69, 0.7)', 'rgba(23, 162, 184, 0.7)', 'rgba(0, 123, 255, 0.7)'],
+            }]
+          },
+          options: { responsive: true, plugins: { legend: { position: 'top' } } }
+        });
+      } else {
+        entradasCtx.parentElement.innerHTML += '<p class="text-center text-muted">Sem dados de entrada para exibir no gráfico.</p>';
+      }
+    }
+  });
+</script>
+{% endblock %}

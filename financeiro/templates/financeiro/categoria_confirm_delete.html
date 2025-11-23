@@ -1,0 +1,18 @@
+{% extends 'financeiro/base.html' %}
+
+{% block title %}Confirmar Exclusão{% endblock %}
+
+{% block content %}
+  <h1 class="h2">Excluir Categoria</h1>
+  <hr>
+  <p>Você tem certeza que deseja excluir a categoria <strong>"{{ object.nome }}"</strong>?</p>
+  <p class="text-danger">
+    <i class="bi bi-exclamation-triangle-fill"></i> <strong>Atenção:</strong> Todos os registros financeiros associados a esta categoria também serão excluídos. Esta ação não pode ser desfeita.
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Sim, tenho certeza</button>
+    <a href="{% url 'financeiro:categoria_list' %}" class="btn btn-secondary">Cancelar</a>
+  </form>
+{% endblock %}
