@@ -105,9 +105,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 
-# Em desenvolvimento, os arquivos estáticos ficam na pasta 'static' do projeto.
-if not 'RENDER' in os.environ:
-    STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+# Diretório onde o `collectstatic` irá procurar por arquivos estáticos adicionais.
+# A pasta 'static' na raiz do projeto é um bom lugar para arquivos globais.
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 # Em produção, o WhiteNoise usará esta pasta para servir os arquivos.
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
