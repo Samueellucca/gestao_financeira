@@ -207,9 +207,13 @@ def processar_voz(request):
             # Se a descrição for curta, usa ela toda como categoria.
             palavras_descricao = descricao.split()
             if len(palavras_descricao) <= 2:
-                nome_categoria = descricao.capitalize()
+                nome_categoria = descricao
             else:
-                nome_categoria = palavras_descricao[0].capitalize()
+                nome_categoria = palavras_descricao[0]
+            
+            # Sanitiza o nome da categoria para remover pontuações e espaços extras
+            nome_categoria = nome_categoria.strip(" .,;!?").capitalize()
+
 
             categoria, criada = Categoria.objects.get_or_create(
                 nome=nome_categoria,
